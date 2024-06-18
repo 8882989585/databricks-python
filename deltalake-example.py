@@ -91,7 +91,7 @@ df.write.format("delta").option("schema","associate_demo").option("location","s3
 # COMMAND ----------
 
 # MAGIC %sql
-# MAGIC create table default.delta_demo_2 location 's3://acs-ap-south-1-bucket/databricks-ext/result-ext/' as select * from default.delta_demo;
+# MAGIC create table default.delta_demo_2 location 's3://acs-ap-south-1-bucket/databricks-ext/result-ext-unique/' as select * from default.delta_demo;
 
 # COMMAND ----------
 
@@ -115,4 +115,23 @@ df.show(truncate=False)
 
 # COMMAND ----------
 
-df.write.format("delta").save("s3://acs-ap-south-1-bucket/databricks-ext/result-json/'")
+df.write.format("delta").save("s3://acs-ap-south-1-bucket/databricks-ext/result-json/")
+
+# COMMAND ----------
+
+df = ss.read.load("s3://acs-ap-south-1-bucket/databricks-ext/result-json/")
+df.withColumn("updated_ts", current_timestamp()).write.option("mergeSchema", True).mode("append").save("s3://acs-ap-south-1-bucket/databricks-ext/result-json/")
+
+# COMMAND ----------
+
+from delta.tables import *
+from pyspark.sql.functions import *
+
+update_df = ss.createDataFrame(ss.sparkContext.parallelize([("B", 4),("I", 9)])).toDF(*["Name", "Class"])
+dt = DeltaTable.forName(spark, "delta_demo")
+dt.alias("main_df").merge(update_df.alias("update_df"), "main_df.Name = update_df.Name").whenMatchedUpdate(set = {"Class" : "update_df.Class"}).whenNotMatchedInsert(values = {"Class" : "update_df.Class", "Name" : "update_df.Name"}).execute()
+
+# COMMAND ----------
+
+# MAGIC %sql
+# MAGIC select * from delta_demo
